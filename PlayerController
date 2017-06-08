@@ -1,0 +1,576 @@
+using UnityEngine;
+using UnityEngine.UI;
+using System.Collections;
+using UnityStandardAssets.CrossPlatformInput;
+using UnityStandardAssets.Utility;
+
+namespace UnityStandardAssets.Vehicles.Car
+{
+    [RequireComponent(typeof(CarController))]
+    public class PlayerController : MonoBehaviour
+    {
+        //Cameras
+        public Camera GUICam;
+        public Camera BlurCam;        
+
+        public float moveSpeed = 10f;
+        public float turnSpeed = 50f;
+        
+        bool isTrigger = false;
+        
+        bool isJoystick = false;
+        public float turnetRotateSpeed = 250f;
+        int j = 0;
+        bool isWheel = true;
+
+        //Time parameters
+        public float timePassed = 0f;
+        float totalTime = 500f;
+        public float diff;
+        public float waitingTime = 0f;
+
+        public float time = 0f;
+        public float CH1_time = 0f;
+        public float CH2_time = 0f;
+        //public float CH3_time = 0f;
+        public float CH4_time = 0f;
+        bool isPlayer = false;
+        bool isWater = false;
+
+        //Jump
+        bool isJumped = false;
+        public AudioSource carJump;
+
+        public GameObject timeText;
+
+        //Checkpoint mesh
+        public GameObject[] checkpointMesh;
+
+        //Stats
+        public Renderer statQuad;
+        public GameObject[] statsArray;
+        float newCH1_time;
+        float newCH2_time;
+        float newCH4_time;
+        float newTimePassed;
+        float newBatteryConsumed;
+        float newRadTime;
+
+
+        public GameObject target;
+        public MeshRenderer WaterCamQuad;
+
+        public GameObject flagCarPoint;
+        public bool isDrone = false;
+
+        public GameObject[] checkpoints;
+        GameObject[] storeCheckPoints;
+
+        Texture2D screenTexture;
+        public Camera mainCam;
+        public GameObject newScreen;
+        int count = 0;
+
+        public Camera hoverCam;
+
+        public CanvasGroup myCG;
+        private bool flash = false;
+        Animation photoAnim;
+        public AudioClip otherClip;
+
+        bool animPlayed = false;
+
+        float timer = 0f;
+        float maxTimer = 2f;
+
+        //Game Over
+        float gameOverMaxTimer = 5;
+        float gameOverTimer = 0;
+
+        //Controller Images
+        public RawImage joystickImage;
+        public RawImage wheelImage;            
+
+        public float finTimer = 0f;
+        public float maxFinTimer = 3f;
+
+        public AudioSource DroneAudio;
+
+
+
+
+        public GameObject roadStop;
+
+        private CarController m_Car; // the car controller we want to use
+        public static PlayerController instance;
+        public float jumpMultiplier=10;
+        float jumpTimer = 5;
+        public int joyNumb1 = 0;
+        public int joyNumb2 = 0;
+
+        bool isBase = false;
+
+        void Start()
+        {
+            instance = this;
+
+            foreach (GameObject c in checkpointMesh)
+            {
+                c.GetComponent<MeshRenderer>().enabled = false;
+            }
+
+            joystickImage.GetComponent<RawImage>().enabled = false;
+            wheelImage.GetComponent<RawImage>().enabled = true;
+            roadStop.GetComponent<BoxCollider>().enabled = false;
+            //statQuad.GetComponent<MeshRenderer>().enabled = false;
+            GameObject.FindGameObjectWithTag("DroneCanvas").GetComponent<Canvas>().enabled = false;
+            photoAnim = GameObject.FindGameObjectWithTag("PhotoObjectHolder").GetComponent<Animation>();
+            mainCam.GetComponent<Camera>().enabled = true;
+            GameObject.FindGameObjectWithTag("RadMapCam").GetComponent<Camera>().enabled = true;
+            GameObject.FindGameObjectWithTag("WaterCam").GetComponent<Camera>().enabled = false;
+            GameObject.FindGameObjectWithTag("DroneCam").GetComponent<Camera>().enabled = false;
+            WaterCamQuad = GameObject.FindGameObjectWithTag("WaterCam").GetComponentInChildren<MeshRenderer>();
+            GameObject.FindGameObjectWithTag("CamHolder").GetComponent<CylinderController>().enabled = false;
+            GameObject.FindGameObjectWithTag("AnalysisCam").GetComponent<Camera>().enabled = false;
+            GameObject.FindGameObjectWithTag("AnalysisCam").GetComponent<CameraRaycast>().enabled = false;
+            GameObject.FindGameObjectWithTag("AnalysisCam").GetComponent<SimpleMouseRotator>().enabled = false;
+            GameObject.FindGameObjectWithTag("Drone").GetComponent<playAnim>().enabled = false;
+            GameObject.FindGameObjectWithTag("Drone").GetComponent<DroneRaycaster>().enabled = false;
+            GameObject.FindGameObjectWithTag("AnalysisCanvas").GetComponent<Canvas>().enabled = false;
+            GameObject.FindGameObjectWithTag("StatsCam").GetComponent<Camera>().enabled = false;
+
+            
+            WaterCamQuad.enabled = false;
+            hoverCam.GetComponent<Camera>().enabled = false;
+
+            m_Car = GetComponent<CarController>();
+            storeCheckPoints = checkpoints;
+
+            for (int i = 1; i < checkpoints.Length; i++)
+            {
+                // checkpoints[i].SetActive(false);              
+                checkpoints[i].GetComponent<MeshRenderer>().enabled = false;
+                checkpoints[i].GetComponent<BoxCollider>().enabled = false;
+                checkpoints[i].GetComponent<MapMarker>().isActive = false;
+            }
+
+            foreach (GameObject g in statsArray)
+            {
+                g.GetComponent<Text>().enabled = false;
+            }
+            int a = 0;
+            foreach (string j in Input.GetJoystickNames())
+            {
+
+                if (j.Trim() == "Logitech Extreme 3D")
+                {
+                    joyNumb1 = a + 1;
+                    a++;
+                }
+
+                else if (j.Trim() == "PC Game Controller")
+                {
+                    joyNumb2 = a + 1;
+                    a++;
+                }
+            }
+
+            statQuad.material.SetFloat("_Mission1", 1);
+            statQuad.material.SetFloat("_Mission2", 1);
+            statQuad.material.SetFloat("_Mission3", 1);
+            statQuad.material.SetFloat("_Radiation", 1);
+            statQuad.material.SetFloat("_Timer", 1);
+            statQuad.material.SetFloat("_Fuel", 1);
+        }
+
+        void LateUpdate()
+        {
+            waitingTime += Time.deltaTime;
+            if(waitingTime > 300)
+            {
+                Application.LoadLevel(0);
+            }
+            if (Input.anyKeyDown)
+            {
+                waitingTime = 0;
+            }
+
+
+            diff = totalTime - timePassed;
+            diff = Mathf.Floor(diff * 10) / 10;
+            timeText.GetComponent<Text>().text = diff.ToString();
+
+            timePassed += Time.deltaTime;
+
+            if(timePassed > totalTime)
+            {
+                timeText.GetComponent<Text>().enabled = false;
+
+                CarController.instance.m_Topspeed = Mathf.Lerp(CarController.instance.m_Topspeed, 0.000001f, Time.deltaTime);
+                CarController.instance.gameOver.alpha = 1;
+
+                if(gameOverTimer < gameOverMaxTimer)
+                {
+                    gameOverTimer += Time.deltaTime;
+                }
+
+                else
+                {
+                    Application.LoadLevel(1);
+                }
+            }
+
+            if (CarController.instance.fuelAmount <= 0)
+            {
+                timeText.GetComponent<Text>().enabled = false;
+            }
+
+
+                //statQuad.material.SetFloat("_Mission1", CH1_time / 100f);
+                //statQuad.material.SetFloat("_Mission2", CH2_time / 400f);
+                //statQuad.material.SetFloat("_Mission3", CH4_time / 50f);
+
+                //statQuad.material.SetFloat("_Radiation", RadController.instance.RadTime / 10f);
+                //statQuad.material.SetFloat("_Timer", timePassed / 2500f);
+                //statQuad.material.SetFloat("_Fuel", CarController.instance.batteryConsumed / 1000f);
+
+                newCH1_time = ((CH1_time / 100f));
+            newCH2_time = ((CH2_time / 400f));
+            newCH4_time = ((CH4_time / 50f));
+            newRadTime = ((RadController.instance.RadTime / 10f));
+            newTimePassed = ((timePassed / 500f));
+            newBatteryConsumed = ((CarController.instance.batteryConsumed / 300f));            
+
+            PlayerPrefs.SetFloat("1st Score", newCH1_time);
+            PlayerPrefs.SetFloat("2nd Score", newCH2_time);
+            PlayerPrefs.SetFloat("4th Score", newCH4_time);
+            PlayerPrefs.SetFloat("Rad Score", newRadTime);
+            PlayerPrefs.SetFloat("Time Passed", newTimePassed);
+            PlayerPrefs.SetFloat("Battery Consumed", newBatteryConsumed);            
+
+            if (jumpTimer > 0) {
+                jumpTimer-=Time.deltaTime;
+            }
+
+            if (flash)
+            {
+                myCG.alpha = myCG.alpha - Time.deltaTime;
+                if (myCG.alpha <= 0)
+                {
+                    myCG.alpha = 0;
+                    flash = false;
+                }
+            }
+
+            else
+            {
+                moveSpeed = 0f;
+                turnSpeed = 0f;
+            }
+
+            if (Input.GetKeyDown(KeyCode.JoystickButton0) || Input.GetKeyDown(KeyCode.K))
+            {
+                if (GameObject.FindGameObjectWithTag("WaterCam").GetComponent<Camera>().enabled == true)
+                {
+                    TakePhoto();
+                    GameObject.FindGameObjectWithTag("WaterCam").GetComponent<Camera>().targetTexture = null;
+                    count++;
+                }
+            }
+
+            if (!isJoystick)
+            {
+                if (Input.GetKeyDown(KeyCode.JoystickButton1) && jumpTimer < 0.1f)
+                {
+                    GetComponent<Rigidbody>().AddForce((Vector3.up + transform.forward) * jumpMultiplier, ForceMode.Impulse);
+                    jumpTimer = 5;
+                    isJumped = true;
+                }
+
+                if (isJumped)
+                {
+                    carJump.Play();
+                    isJumped = false;
+                }
+            }
+
+            if(isBase)
+            {
+                if (maxFinTimer > finTimer)
+                {
+                    finTimer += Time.deltaTime;
+                }
+                else
+                {
+                    Application.LoadLevel(3);
+                }
+            }
+
+            if (count == 3)
+            {
+                CarController.instance.m_Topspeed = 50;
+                GameObject.FindGameObjectWithTag("WaterZone").GetComponent<BoxCollider>().size = GameObject.FindGameObjectWithTag("WaterZone").GetComponent<BoxCollider>().size / 3;
+                GameObject.FindGameObjectWithTag("WaterCam").GetComponent<Camera>().GetComponent<Camera>().enabled = true;
+                PlaySounds.instance.mission4.Play();
+            }
+
+            if (animPlayed)
+            {
+                if (timer < maxTimer)
+                {
+                    timer += Time.deltaTime;
+                }
+                else
+                {
+                    animPlayed = false;
+                    timer = 0;
+                }
+            }
+
+            if (isDrone)
+            {
+                transform.position = flagCarPoint.transform.position;
+                transform.rotation = Quaternion.Euler(0, 270, 0);
+            }
+
+            if (isWheel == true)
+            {
+                //float moveHorizontal = Input.GetAxis("WX") * Time.deltaTime * moveSpeed;
+                //float moveVertical = Input.GetAxis("WY") * Time.deltaTime * -moveSpeed;
+                //transform.Translate(0, 0, moveVertical);
+                //transform.Rotate(new Vector3(0, 1, 0), moveHorizontal * Time.deltaTime * turnetRotateSpeed);
+
+                float h =  CrossPlatformInputManager.GetAxis("Joy" + joyNumb2 + "X");
+                float v = -CrossPlatformInputManager.GetAxis("Joy" + joyNumb2 + "Y");
+
+                //float h = CrossPlatformInputManager.GetAxis("Horizontal");
+                //float v = -CrossPlatformInputManager.GetAxis("Vertical");
+
+#if !MOBILE_INPUT
+                float handbrake = CrossPlatformInputManager.GetAxis("Jump");
+                m_Car.Move(h, v, v, 0);
+#else
+                m_Car.Move(h, v, v, 0f);
+#endif
+            }
+
+            if (isTrigger)
+            {
+                if (isPlayer)
+                {
+                    time += Time.deltaTime;
+                    CH1_time = time;
+                }
+                
+                else if (isDrone)
+                {
+                    time += Time.deltaTime;
+                    CH2_time = time;
+                }
+                else if (isWater)
+                {
+                    time += Time.deltaTime;
+                    CH4_time = time;
+                } 
+                else
+                {
+                    time = 0;
+                }            
+            }
+        }
+
+        void OnTriggerEnter(Collider other)
+        {
+            // moveSpeed = 0f;
+            // turnSpeed = 0f;
+            isTrigger = true;
+            
+            isWheel = false;
+
+            if (other.gameObject.tag == "StoneZone")
+            {
+                joystickImage.GetComponent<RawImage>().enabled = true;
+                wheelImage.GetComponent<RawImage>().enabled = false;
+                isJoystick = true;
+                isPlayer = true;
+                foreach(AudioSource a in this.GetComponents<AudioSource>())
+                {
+                    a.Pause();
+                }
+                CarController.instance.m_Topspeed = 0.000001f;
+                GameObject.FindGameObjectWithTag("AnalysisCanvas").GetComponent<Canvas>().enabled = true;
+                GameObject.FindGameObjectWithTag("StoneZone").GetComponent<BoxCollider>().size = GameObject.FindGameObjectWithTag("StoneZone").GetComponent<BoxCollider>().size * 3;
+                GameObject.FindGameObjectWithTag("StoneZone").GetComponent<MeshRenderer>().enabled = false;
+                GameObject.FindGameObjectWithTag("AnalysisCam").GetComponent<Camera>().enabled = true;
+                GameObject.FindGameObjectWithTag("AnalysisCam").GetComponent<CameraRaycast>().enabled = true;                
+                mainCam.GetComponent<Camera>().enabled = false;
+                GUICam.GetComponent<Camera>().enabled = false;
+                BlurCam.GetComponent<Camera>().enabled = false;
+                GameObject.FindGameObjectWithTag("RadMapCam").GetComponent<Camera>().enabled = false;
+                GameObject.FindGameObjectWithTag("Canvas").GetComponent<CanvasGroup>().alpha = 0;
+                GameObject.FindGameObjectWithTag("AnalysisCam").GetComponent<SimpleMouseRotator>().enabled = true;
+                GetComponent<CarController>().enabled = false;
+                checkpointMesh[0].GetComponent<MeshRenderer>().enabled = true;
+            }
+
+            if (other.gameObject.tag == "WaterZone")
+            {
+                joystickImage.GetComponent<RawImage>().enabled = true;
+                wheelImage.GetComponent<RawImage>().enabled = false;
+                isJoystick = true;
+                foreach (AudioSource a in this.GetComponents<AudioSource>())
+                {
+                    a.Pause();
+                }
+                isWater = true;
+                CarController.instance.m_Topspeed = 0.000001f;
+                GameObject.FindGameObjectWithTag("WaterZone").GetComponent<BoxCollider>().size = GameObject.FindGameObjectWithTag("WaterZone").GetComponent<BoxCollider>().size * 3;
+                mainCam.GetComponent<Camera>().enabled = false;                
+                GUICam.GetComponent<Camera>().enabled = false;
+                BlurCam.GetComponent<Camera>().enabled = false;
+                GameObject.FindGameObjectWithTag("RadMapCam").GetComponent<Camera>().enabled = false;
+                GameObject.FindGameObjectWithTag("WaterCam").GetComponent<Camera>().enabled = true;
+                WaterCamQuad.enabled = true;
+                //GameObject.FindGameObjectWithTag("Canvas").GetComponent<Canvas>().enabled = false;
+                GameObject.FindGameObjectWithTag("Canvas").GetComponent<CanvasGroup>().alpha = 0;
+                GameObject.FindGameObjectWithTag("CamHolder").GetComponent<CylinderController>().enabled = true;
+                checkpointMesh[3].GetComponent<MeshRenderer>().enabled = true;
+                checkpointMesh[2].GetComponent<MeshRenderer>().enabled = false;
+                GetComponent<CarController>().enabled = false;
+            }
+
+            if (other.gameObject.tag == "DroneMission")
+            {
+                joystickImage.GetComponent<RawImage>().enabled = true;
+                wheelImage.GetComponent<RawImage>().enabled = false;
+
+                isJoystick = true;
+                foreach (AudioSource a in this.GetComponents<AudioSource>())
+                {
+                    a.Pause();
+                }
+                DroneAudio.Play();
+                GameObject.FindGameObjectWithTag("DroneMission").GetComponent<BoxCollider>().size = GameObject.FindGameObjectWithTag("DroneMission").GetComponent<BoxCollider>().size * 1.5f;
+                isDrone = true;
+                hoverCam.GetComponent<Camera>().enabled = true;
+                CarController.instance.m_Topspeed = 0.000001f;
+                //GetComponent<CarUserControl>().enabled = false;
+                GetComponent<CarController>().enabled = false;
+                roadStop.GetComponent<BoxCollider>().enabled = true;
+                mainCam.GetComponent<Camera>().enabled = false;
+                GUICam.GetComponent<Camera>().enabled = false;
+                BlurCam.GetComponent<Camera>().enabled = false;
+                GameObject.FindGameObjectWithTag("Drone").GetComponent<playAnim>().enabled = true;
+                //GameObject.FindGameObjectWithTag("Canvas").GetComponent<Canvas>().enabled = false;
+                GameObject.FindGameObjectWithTag("Canvas").GetComponent<CanvasGroup>().alpha = 0;
+                GameObject.FindGameObjectWithTag("DroneMission").transform.localScale = GameObject.FindGameObjectWithTag("DroneMission").transform.localScale * 2;
+                checkpointMesh[1].GetComponent<MeshRenderer>().enabled = true;
+                checkpointMesh[0].GetComponent<MeshRenderer>().enabled = false;
+            }
+
+            if (other.gameObject.tag == "Base")
+            {
+                joystickImage.GetComponent<RawImage>().enabled = false;
+                wheelImage.GetComponent<RawImage>().enabled = false;
+
+                isBase = true;
+                //GameObject.FindGameObjectWithTag("StatsCam").GetComponent<Camera>().enabled = true;
+                foreach (AudioSource a in this.GetComponents<AudioSource>())
+                {
+                    a.Pause();
+                }
+                CarController.instance.m_Topspeed = 0.000001f;
+                GetComponent<CarController>().enabled = false;
+                //GameObject.FindGameObjectWithTag("Canvas").GetComponent<Canvas>().enabled = false;
+                GameObject.FindGameObjectWithTag("Canvas").GetComponent<CanvasGroup>().alpha = 0;
+                GameObject.FindGameObjectWithTag("DroneCanvas").GetComponent<Canvas>().enabled = false;
+                GameObject.FindGameObjectWithTag("AnalysisCanvas").GetComponent<Canvas>().enabled = false;
+                //Application.LoadLevel(0);
+                //foreach (GameObject g in statsArray)
+                //{
+                //    g.GetComponent<Text>().enabled = true;
+                //}
+            }
+        }
+
+        void OnTriggerExit(Collider col)
+        {
+            joystickImage.GetComponent<RawImage>().enabled = false;
+            wheelImage.GetComponent<RawImage>().enabled = true;
+
+            isJoystick = false;
+            
+            foreach (AudioSource a in this.GetComponents<AudioSource>())
+            {
+                a.UnPause();
+            }
+
+            count = 0;
+            isPlayer = false;
+            isDrone = false;
+            isWater = false;            
+
+            if (j < storeCheckPoints.Length)
+            {
+                HideCheckpoint();
+            }
+            GetComponent<CarUserControl>().enabled = true;
+            GetComponent<CarController>().enabled = true;
+            mainCam.GetComponent<Camera>().enabled = true;
+            GUICam.GetComponent<Camera>().enabled = true;
+            BlurCam.GetComponent<Camera>().enabled = true;
+            GameObject.FindGameObjectWithTag("RadMapCam").GetComponent<Camera>().enabled = true;
+            GameObject.FindGameObjectWithTag("WaterCam").GetComponent<Camera>().enabled = false;
+            WaterCamQuad.enabled = false;
+            //GameObject.FindGameObjectWithTag("Canvas").GetComponent<Canvas>().enabled = true;
+            GameObject.FindGameObjectWithTag("Canvas").GetComponent<CanvasGroup>().alpha = 1;
+        }
+
+        void HideCheckpoint()
+        {
+            storeCheckPoints[j].GetComponent<MapMarker>().isActive = false;
+            //  storeCheckPoints[j].SetActive(false);
+            //storeCheckPoints[j].GetComponent<MeshRenderer>().enabled = false;
+            storeCheckPoints[j].GetComponent<BoxCollider>().enabled = false;
+
+            if (j < storeCheckPoints.Length - 1)
+            {
+                //storeCheckPoints[j + 1].SetActive(true);
+                //storeCheckPoints[j + 1].GetComponent<MeshRenderer>().enabled = true;
+                storeCheckPoints[j + 1].GetComponent<BoxCollider>().enabled = true;
+                storeCheckPoints[j + 1].GetComponent<MapMarker>().isActive = true;
+                target.transform.position = storeCheckPoints[j + 1].transform.position;
+            }
+            j++;
+        }
+
+
+        void TakePhoto()
+        {
+            CarController.instance.m_Topspeed = 0.000001f;
+            AudioSource audio = GetComponent<AudioSource>();
+            audio.Play();
+            audio.clip = otherClip;
+            audio.Play();
+            //GameObject.FindGameObjectWithTag("Canvas").GetComponent<Canvas>().enabled = false;
+            GameObject.FindGameObjectWithTag("Canvas").GetComponent<CanvasGroup>().alpha = 0;
+            RenderTexture screen = new RenderTexture(1600, 900, 24);
+            GameObject.FindGameObjectWithTag("WaterCam").GetComponent<Camera>().targetTexture = screen;
+            GameObject.FindGameObjectWithTag("PhotoCamera").GetComponent<Camera>().enabled = true;
+            screenTexture = new Texture2D(screen.width, screen.height, TextureFormat.RGB24, false);
+            GameObject.FindGameObjectWithTag("WaterCam").GetComponent<Camera>().Render();
+            RenderTexture.active = screen;
+            screenTexture.ReadPixels(new Rect(0, 0, screen.width, screen.height), 0, 0);
+            screenTexture.Apply();
+            GameObject.FindGameObjectWithTag("WaterCam").GetComponent<Camera>().targetTexture = null;
+            RenderTexture.active = null;
+            DestroyImmediate(screen, true);
+            flash = true;
+            myCG.alpha = 1;
+            newScreen.gameObject.SetActive(true);
+            newScreen.GetComponent<Renderer>().material.SetTexture("_Photo", screenTexture);
+            photoAnim.Play();
+            animPlayed = true;
+        }
+    }
+}
